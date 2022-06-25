@@ -31,6 +31,7 @@ set(LIBCXX_SOURCES
   shared_mutex.cpp
   stdexcept.cpp
   string.cpp
+  hq_string.cpp
   strstream.cpp
   support/runtime/exception_fallback.ipp
   support/runtime/exception_glibcxx.ipp
@@ -51,6 +52,7 @@ set(LIBCXX_SOURCES
   valarray.cpp
   variant.cpp
   vector.cpp
+  hq_vector.cpp
   )
 
 if(WIN32)

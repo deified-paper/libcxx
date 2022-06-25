@@ -1,0 +1,39 @@
+#ifndef _LIBCPP_HQ_DEFS
+#define _LIBCPP_HQ_DEFS
+
+#include <cstdlib>
+
+_LIBCPP_BEGIN_NAMESPACE_STD
+
+extern "C" {
+void __hq_object_define(const void* p, uint64_t sz, bool priv);
+void __hq_object_check(const void* p, uint64_t sz);
+void __hq_object_realloc(const void* dst, const void* src, uint64_t sz);
+void __hq_object_invalidate(const void* p, uint64_t sz);
+
+void __hq_pointer_define(const void** pp, const void* p, bool priv);
+void __hq_pointer_check(const void** pp, const void* p);
+void __hq_pointer_check_invalidate(const void** pp, const void* p);
+void __hq_pointer_invalidate(const void** p);
+
+void __hq_pointer_copy(void* dst, const void* src, uint64_t sz);
+void __hq_pointer_realloc(void* src, uint64_t sz);
+void __hq_pointer_free(void* p);
+
+void __hq_syscall();
+}
+
+static constexpr unsigned long POINTER_ALIGN = 8;
+static constexpr unsigned long ALIGN(unsigned long v, unsigned long a) {
+  return v & ~(a - 1);
+}
+static constexpr unsigned long UNALIGN(unsigned long v, unsigned long a) {
+  return v & (a - 1);
+}
+static constexpr unsigned long ROUND_UP(unsigned long v, unsigned long a) {
+  return ALIGN(v + a - 1, a);
+}
+
+_LIBCPP_END_NAMESPACE_STD
+
+#endif

@@ -1,0 +1,198 @@
+// -*- C++ -*-
+
+#ifndef HQ_WRAPPER_H_
+#define HQ_WRAPPER_H_
+
+#include <algorithm>
+#include <cstdint>
+#include <new>
+#include <type_traits>
+
+_LIBCPP_BEGIN_NAMESPACE_STD
+
+// Attributes on a variable are not part of its type, so use a separate struct
+// with partial specialization to select the appropriate attribute
+template <typename T, bool Private>
+struct hq_data {};
+
+template <typename T>
+struct hq_data<T, false> {
+  using T_aligned =
+      typename std::aligned_storage<sizeof(T), std::max(alignof(T), 8UL)>::type;
+  T_aligned __attribute__((annotate("hq"))) data;
+};
+
+template <typename T>
+struct hq_data<T, true> {
+  using T_aligned =
+      typename std::aligned_storage<sizeof(T), std::max(alignof(T), 8UL)>::type;
+  T_aligned __attribute__((annotate("hq_private"))) data;
+};
+
+// Dummy hq_wrapper class that annotates contents for DFI instrumentation
+// Note: Only suitable for classes without internal heap allocations
+template <typename T, bool Private = false>
+class hq_wrapper final {
+  hq_data<T, Private> d;
+
+  using T_no_const = typename std::remove_const<T>::type;
+
+  inline void zero() noexcept {
+    // Explicitly zero the initial storage
+    // FIXME: Technically, only need to zero unaligned storage, but
+    // instrumentation runs early during compilation, so certain
+    // intra-procedural calls have not been optimized away (e.g. addressof(),
+    // pointer_traits<pointer>::pointer_to(), etc.)
+    memset(&d.data, 0, sizeof(d.data));
+  }
+
+  constexpr inline T&& movable_reference() noexcept {
+    return std::move(*reinterpret_cast<T*>(&d.data));
+  }
+
+  constexpr inline T_no_const& mutable_reference() noexcept {
+    // const_cast in case underlying type is const
+    return *const_cast<T_no_const*>(reinterpret_cast<T*>(&d.data));
+  }
+
+  constexpr inline const T& reference() const noexcept {
+    return *reinterpret_cast<const T*>(&d.data);
+  }
+
+public:
+  /* Constructors */
+  hq_wrapper() noexcept {
+    zero();
+    new (&d.data) T_no_const;
+  }
+
+  hq_wrapper(const hq_wrapper<T>& other) noexcept {
+    zero();
+    new (&d.data) T_no_const(other);
+  }
+
+  hq_wrapper(hq_wrapper<T>&& other) noexcept {
+    zero();
+    mutable_reference() = other.movable_reference();
+  }
+
+  hq_wrapper(const T& other) noexcept {
+    zero();
+    new (&d.data) T_no_const(other);
+  }
+
+  hq_wrapper(T&& other) noexcept {
+    zero();
+    new (&d.data) T_no_const(other);
+  }
+
+  /* Destructors */
+  ~hq_wrapper() noexcept {
+    if (std::is_trivially_destructible<T>::value) {
+      // Use default-assignment to generate invalidation instrumentation
+      // Note: Explicit store WILL be removed by instrumentation
+      mutable_reference() = {};
+    }
+  }
+
+  /* Observers */
+  // Instrumentation will insert OBJECT/POINTER-DEFINE/CHECK on
+  // loads/stores/calls. Analysis is inter-procedural, but per-CU only.
+  // Provide conversion member functions since implicit type conversion does not
+  // occur during template type deduction.
+  operator T&() & noexcept { return mutable_reference(); }
+  operator const T&() const& noexcept { return reference(); }
+
+  // Explicitly modify address-of operator to ensure only instrumented member
+  // pointers are used, rather than uninstrumented wrapped object pointers
+  T* operator&() { return &mutable_reference(); }
+  const T* operator&() const { return &reference(); }
+
+  T& v() & noexcept { return operator T&(); }
+  const T& v() const& noexcept { return operator const T&(); }
+
+  T* p() & noexcept { return operator&(); }
+  const T* p() const& noexcept { return operator&(); }
+
+  /* Comparison operators */
+  template <typename U = T,
+            typename std::enable_if<std::is_class<U>::value, bool>::type = true>
+  bool operator==(const hq_wrapper<U>& other) const noexcept {
+    return reference() == other.reference();
+  }
+
+  template <typename U = T,
+            typename std::enable_if<std::is_class<U>::value, bool>::type = true>
+  bool operator!=(const hq_wrapper<U>& other) const noexcept {
+    return reference() != other.reference();
+  }
+
+  template <typename U = T,
+            typename std::enable_if<std::is_class<U>::value, bool>::type = true>
+  bool operator<(const hq_wrapper<U>& other) const noexcept {
+    return reference() < other.reference();
+  }
+
+  template <typename U = T,
+            typename std::enable_if<std::is_class<U>::value, bool>::type = true>
+  bool operator<=(const hq_wrapper<U>& other) const noexcept {
+    return reference() <= other.reference();
+  }
+
+  template <typename U = T,
+            typename std::enable_if<std::is_class<U>::value, bool>::type = true>
+  bool operator>(const hq_wrapper<U>& other) const noexcept {
+    return reference() > other.reference();
+  }
+  template <typename U = T,
+            typename std::enable_if<std::is_class<U>::value, bool>::type = true>
+  bool operator>=(const hq_wrapper<U>& other) const noexcept {
+    return reference() >= other.reference();
+  }
+
+  /* Assignment operators */
+  hq_wrapper<T>& operator=(const hq_wrapper<T>& other) noexcept {
+    mutable_reference() = other.reference();
+    return *this;
+  }
+
+  hq_wrapper<T>& operator=(hq_wrapper<T>&& other) noexcept {
+    mutable_reference() = other.movable_reference();
+    return *this;
+  }
+
+  hq_wrapper<T>& operator=(const T& other) noexcept {
+    mutable_reference() = other;
+    return *this;
+  }
+
+  hq_wrapper<T>& operator=(T&& other) noexcept {
+    mutable_reference() = other;
+    return *this;
+  }
+
+  /* Type-specific Members */
+  template <typename U = T>
+  typename std::enable_if<std::is_pointer<U>::value,
+                          typename std::remove_pointer<U>::type&>::type
+  operator*() const noexcept {
+    return *reference();
+  }
+
+  template <typename U = T>
+  typename std::enable_if<std::is_pointer<U>::value, U>::type
+  operator->() noexcept {
+    return reference();
+  }
+
+  template <typename U = T>
+  typename std::enable_if<std::is_pointer<U>::value,
+                          typename std::add_const<U>::type>::type
+  operator->() const noexcept {
+    return reference();
+  }
+};
+
+_LIBCPP_END_NAMESPACE_STD
+
+#endif

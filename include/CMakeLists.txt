@@ -1,5 +1,6 @@
 set(files
   __bit_reference
+  __hq_bit_reference
   __bsd_locale_defaults.h
   __bsd_locale_fallbacks.h
   __errc
@@ -8,6 +9,7 @@ set(files
   __functional_base
   __functional_base_03
   __hash_table
+  __hq_hash_table
   __libcpp_version
   __locale
   __mutex_base
@@ -19,7 +21,9 @@ set(files
   __string
   __threading_support
   __tree
+  __hq_tree
   __tuple
+  __hq_tuple
   __undef_macros
   algorithm
   any
@@ -100,17 +104,21 @@ set(files
   iomanip
   ios
   iosfwd
+  hq_iosfwd
   iostream
   istream
   iterator
+  hq_iterator
   limits
   limits.h
   list
   locale
   locale.h
   map
+  hq_map
   math.h
   memory
+  hq_memory
   module.modulemap
   mutex
   new
@@ -123,6 +131,7 @@ set(files
   regex
   scoped_allocator
   set
+  hq_set
   setjmp.h
   shared_mutex
   span
@@ -136,8 +145,10 @@ set(files
   stdlib.h
   streambuf
   string
+  hq_string
   string.h
   string_view
+  hq_string_view
   strstream
   system_error
   tgmath.h
@@ -147,11 +158,15 @@ set(files
   typeindex
   typeinfo
   unordered_map
+  hq_unordered_map
   unordered_set
+  hq_unordered_set
   utility
+  hq_utility
   valarray
   variant
   vector
+  hq_vector
   version
   wchar.h
   wctype.h
